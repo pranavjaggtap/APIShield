@@ -64,6 +64,7 @@ public class SecurityGatewayFilter implements GlobalFilter, Ordered {
                 request.getMethod() != null ? request.getMethod().name() : "UNKNOWN",
                 request.getPath().value(),
                 request.getHeaders().asMultiValueMap(),
+                request.getQueryParams(),
                 clientIp,
                 Instant.now());
     }

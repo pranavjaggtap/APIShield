@@ -13,6 +13,7 @@ public record SecurityAnalysisContext(
         String method,
         String path,
         Map<String, List<String>> headers,
+        Map<String, List<String>> queryParams,
         String clientIp,
         Instant timestamp
 ) {

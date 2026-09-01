@@ -24,7 +24,7 @@ class SecurityPipelineTest {
     private final DecisionEngine decisionEngine = new DefaultDecisionEngine();
 
     private final SecurityAnalysisContext context = new SecurityAnalysisContext(
-            "req-1", "GET", "/api/users/1", Map.of(), "127.0.0.1", Instant.now());
+            "req-1", "GET", "/api/users/1", Map.of(), Map.of(), "127.0.0.1", Instant.now());
 
     @Test
     void zeroDetectorsResultInAllow() {
