@@ -1,0 +1,88 @@
+services:
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${DB_NAME:-apishield_db}
+      POSTGRES_USER: ${DB_USERNAME:-apishield_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - apishield_pg_data:/var/lib/postgresql
+    networks:
+      - apishield-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-apishield_user} -d ${DB_NAME:-apishield_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - apishield_redis_data:/data
+    networks:
+      - apishield-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  user-service:
+    build:
+      context: ../user-service
+    ports:
+      - "8081:8081"
+    networks:
+      - apishield-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/users/1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  apishield:
+    build:
+      context: .
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-apishield_db}
+      DB_USERNAME: ${DB_USERNAME:-apishield_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      USER_SERVICE_HOST: user-service
+      USER_SERVICE_PORT: 8081
+    ports:
+      - "8080:8080"
+    networks:
+      - apishield-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  apishield-network:
+    driver: bridge
+
+volumes:
+  apishield_pg_data:
+  apishield_redis_data:

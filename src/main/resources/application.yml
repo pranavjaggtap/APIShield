@@ -2,7 +2,7 @@ spring:
   application:
     name: APIShield
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/${DB_NAME:apishield_db}
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:apishield_db}
     username: ${DB_USERNAME:apishield_user}
     password: ${DB_PASSWORD}
     pool:
@@ -20,7 +20,7 @@ spring:
         webflux:
           routes:
             - id: user-service
-              uri: http://localhost:8081
+              uri: http://${USER_SERVICE_HOST:localhost}:${USER_SERVICE_PORT:8081}
               predicates:
                 - Path=/api/users/**
               filters:
