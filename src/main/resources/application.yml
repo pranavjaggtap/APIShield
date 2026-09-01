@@ -9,6 +9,11 @@ spring:
       enabled: true
       initial-size: 2
       max-size: 10
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   cloud:
     gateway:
       server:
