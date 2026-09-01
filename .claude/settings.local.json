@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -version)",
+      "Bash(jps -l)",
+      "Bash(lsof -i :8080 -sTCP:LISTEN)",
+      "Bash(./mvnw -q dependency:tree -o)",
+      "Bash(./mvnw dependency:tree -o)",
+      "WebSearch",
+      "WebFetch(domain:spring.io)"
+    ]
+  }
+}
