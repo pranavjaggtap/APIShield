@@ -1,6 +1,14 @@
 spring:
   application:
     name: APIShield
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/${DB_NAME:apishield_db}
+    username: ${DB_USERNAME:apishield_user}
+    password: ${DB_PASSWORD}
+    pool:
+      enabled: true
+      initial-size: 2
+      max-size: 10
   cloud:
     gateway:
       server:
