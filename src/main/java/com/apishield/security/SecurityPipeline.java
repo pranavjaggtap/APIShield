@@ -6,6 +6,7 @@ import com.apishield.model.Decision;
 import com.apishield.model.SecurityAnalysisContext;
 import com.apishield.model.ThreatSignal;
 import com.apishield.risk.RiskScoreEngine;
+import com.apishield.risk.context.RiskContext;
 import com.apishield.threat.ThreatDetector;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -15,7 +16,8 @@ import java.util.List;
 
 /**
  * Orchestrates the security pipeline: runs every registered {@link ThreatDetector} against
- * the detector view ({@link SecurityAnalysisContext}) of the request's {@link RequestContext}, aggregates the resulting signals into a {@link com.apishield.model.RiskScore},
+ * the detector view ({@link SecurityAnalysisContext}) of the request's {@link RequestContext}, scores the
+ * resulting signals with the request's {@link RiskContext} into a {@link com.apishield.model.RiskScore},
  * and produces a final {@link Decision}. With zero detectors registered, this deterministically
  * yields ALLOW - the gateway is a transparent passthrough until real detectors are added.
  * <p>
@@ -41,7 +43,7 @@ public class SecurityPipeline {
         return Flux.fromIterable(detectors)
                 .flatMap(detector -> safeDetect(detector, context))
                 .collectList()
-                .map(riskScoreEngine::score)
+                .map(signals -> riskScoreEngine.score(signals, RiskContext.withoutInputs(requestContext)))
                 .map(decisionEngine::decide);
     }
 

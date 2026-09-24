@@ -7,8 +7,9 @@ import com.apishield.decision.DefaultDecisionEngine;
 import com.apishield.model.Decision;
 import com.apishield.model.SecurityAnalysisContext;
 import com.apishield.model.ThreatSignal;
-import com.apishield.risk.DefaultRiskScoreEngine;
+import com.apishield.risk.ContextualRiskScoreEngine;
 import com.apishield.risk.RiskScoreEngine;
+import com.apishield.risk.context.RiskContext;
 import com.apishield.threat.BotAutomationDetector;
 import com.apishield.threat.SqlInjectionDetector;
 import com.apishield.threat.ThreatDetector;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SecurityPipelineTest {
 
-    private final RiskScoreEngine riskScoreEngine = new DefaultRiskScoreEngine();
+    private final RiskScoreEngine riskScoreEngine = new ContextualRiskScoreEngine();
     private final DecisionEngine decisionEngine = new DefaultDecisionEngine();
 
     private final RequestContext context = new RequestContext(
@@ -126,6 +127,23 @@ class SecurityPipelineTest {
         assertThat(analysisContext.queryParams()).isSameAs(requestContext.queryParams());
         assertThat(analysisContext.clientIp()).isEqualTo("10.0.0.5");
         assertThat(analysisContext.timestamp()).isEqualTo(requestContext.timestamp());
+    }
+
+    @Test
+    void riskEngineReceivesRiskContextForTheRequest() {
+        AtomicReference<RiskContext> received = new AtomicReference<>();
+        RiskScoreEngine recordingEngine = (signals, riskContext) -> {
+            received.set(riskContext);
+            return riskScoreEngine.score(signals, riskContext);
+        };
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(), recordingEngine, decisionEngine);
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(received.get().request()).isSameAs(context);
+        assertThat(received.get().inputs().isEmpty()).isTrue();
     }
 
     @Test

@@ -14,7 +14,7 @@ class DefaultDecisionEngineTest {
 
     @Test
     void belowThresholdAllows() {
-        RiskScore riskScore = new RiskScore(DefaultDecisionEngine.BLOCK_THRESHOLD - 0.1, List.of());
+        RiskScore riskScore = RiskScore.fromSignalsOnly(DefaultDecisionEngine.BLOCK_THRESHOLD - 0.1, List.of());
 
         Decision decision = engine.decide(riskScore);
 
@@ -23,7 +23,7 @@ class DefaultDecisionEngineTest {
 
     @Test
     void atThresholdBlocks() {
-        RiskScore riskScore = new RiskScore(DefaultDecisionEngine.BLOCK_THRESHOLD, List.of());
+        RiskScore riskScore = RiskScore.fromSignalsOnly(DefaultDecisionEngine.BLOCK_THRESHOLD, List.of());
 
         Decision decision = engine.decide(riskScore);
 
@@ -32,7 +32,7 @@ class DefaultDecisionEngineTest {
 
     @Test
     void aboveThresholdBlocks() {
-        RiskScore riskScore = new RiskScore(DefaultDecisionEngine.BLOCK_THRESHOLD + 0.5, List.of());
+        RiskScore riskScore = RiskScore.fromSignalsOnly(DefaultDecisionEngine.BLOCK_THRESHOLD + 0.5, List.of());
 
         Decision decision = engine.decide(riskScore);
 
@@ -41,7 +41,7 @@ class DefaultDecisionEngineTest {
 
     @Test
     void zeroScoreAllows() {
-        RiskScore riskScore = new RiskScore(0.0, List.of());
+        RiskScore riskScore = RiskScore.fromSignalsOnly(0.0, List.of());
 
         Decision decision = engine.decide(riskScore);
 
