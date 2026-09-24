@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
+import { ApiConsolePage } from "./pages/ApiConsolePage";
 import { ThreatsPage } from "./pages/ThreatsPage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { SecurityEventsPage } from "./pages/SecurityEventsPage";
@@ -13,6 +14,7 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/api-console" element={<ApiConsolePage />} />
           <Route path="/threats" element={<ThreatsPage />} />
           <Route path="/requests" element={<RequestsPage />} />
           <Route path="/security-events" element={<SecurityEventsPage />} />

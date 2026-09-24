@@ -52,6 +52,27 @@ export const SEVERITY_META: Record<Severity, SeverityMeta> = {
   CRITICAL: { label: "Critical", color: "critical", dotClassName: "bg-critical" },
 };
 
+/**
+ * Maps a backend detector name (ThreatSignal.detectorName) to its threat type, so persisted
+ * signals reuse the same labels and icons as the rest of the dashboard. Returns null for any
+ * other name - e.g. a fail-closed detector-failure signal, which is named after the detector class.
+ */
+const DETECTOR_THREAT_TYPE: Record<string, ThreatType> = {
+  "sql-injection": "SQL_INJECTION",
+  xss: "XSS",
+  "replay-attack": "REPLAY_ATTACK",
+  "frequency-abuse": "FREQUENCY_ABUSE",
+  "bot-automation": "BOT_AUTOMATION",
+};
+
+export function threatTypeForDetector(detectorName: string): ThreatType | null {
+  return DETECTOR_THREAT_TYPE[detectorName] ?? null;
+}
+
+export function isKnownDecision(decision: string): decision is DecisionOutcome {
+  return Object.hasOwn(DECISION_META, decision);
+}
+
 export function riskBadgeColor(riskScore: number): BadgeColor {
   if (riskScore >= 0.8) return "critical";
   if (riskScore >= 0.5) return "danger";

@@ -14,6 +14,14 @@ const timeFormatter = new Intl.DateTimeFormat("en-US", {
   second: "2-digit",
   hour12: false,
 });
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
 
 export function formatNumber(value: number): string {
@@ -39,6 +47,11 @@ export function formatTrend(value: number): string {
 
 export function formatTime(isoTimestamp: string): string {
   return timeFormatter.format(new Date(isoTimestamp));
+}
+
+/** Date + time, for records that can span days (e.g. persisted security events). */
+export function formatDateTime(isoTimestamp: string): string {
+  return dateTimeFormatter.format(new Date(isoTimestamp));
 }
 
 export function formatRelativeTime(isoTimestamp: string): string {

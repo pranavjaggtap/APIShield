@@ -6,6 +6,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
   UserCog,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -13,6 +14,7 @@ import { cn } from "../../lib/cn";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/api-console", label: "API Console", icon: Terminal, end: false },
   { to: "/threats", label: "Threats", icon: ShieldAlert, end: false },
   { to: "/requests", label: "Requests", icon: Network, end: false },
   { to: "/security-events", label: "Security Events", icon: FileWarning, end: false },
