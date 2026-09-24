@@ -1,5 +1,6 @@
 package com.apishield.security;
 
+import com.apishield.context.RequestContext;
 import com.apishield.decision.DecisionEngine;
 import com.apishield.model.Decision;
 import com.apishield.model.SecurityAnalysisContext;
@@ -14,7 +15,7 @@ import java.util.List;
 
 /**
  * Orchestrates the security pipeline: runs every registered {@link ThreatDetector} against
- * the request context, aggregates the resulting signals into a {@link com.apishield.model.RiskScore},
+ * the detector view ({@link SecurityAnalysisContext}) of the request's {@link RequestContext}, aggregates the resulting signals into a {@link com.apishield.model.RiskScore},
  * and produces a final {@link Decision}. With zero detectors registered, this deterministically
  * yields ALLOW - the gateway is a transparent passthrough until real detectors are added.
  * <p>
@@ -35,7 +36,8 @@ public class SecurityPipeline {
         this.decisionEngine = decisionEngine;
     }
 
-    public Mono<Decision> evaluate(SecurityAnalysisContext context) {
+    public Mono<Decision> evaluate(RequestContext requestContext) {
+        SecurityAnalysisContext context = SecurityAnalysisContext.from(requestContext);
         return Flux.fromIterable(detectors)
                 .flatMap(detector -> safeDetect(detector, context))
                 .collectList()
