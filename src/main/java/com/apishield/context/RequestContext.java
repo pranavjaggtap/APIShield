@@ -24,8 +24,10 @@ import java.util.Optional;
  * {@code HttpHeaders} view detectors previously received - clients (and proxies such as Node's)
  * frequently send lower-cased names like {@code user-agent}.
  * <p>
- * {@code route} is empty when no gateway route was matched. {@code userId} is always empty
- * until an authentication layer exists to populate it.
+ * {@code route} is empty when no gateway route was matched. {@code userId} is empty as created
+ * by {@link RequestContextFactory}; once a request is authenticated,
+ * {@link com.apishield.auth.JwtAuthenticationFilter} replaces the stored context with a copy
+ * produced by {@link #withUserId(String)} - the original instance is never modified.
  */
 public record RequestContext(
         String requestId,
@@ -49,6 +51,17 @@ public record RequestContext(
         Objects.requireNonNull(userId, "userId");
         headers = immutableCaseInsensitiveCopy(Objects.requireNonNull(headers, "headers"));
         queryParams = immutableCopy(Objects.requireNonNull(queryParams, "queryParams"));
+    }
+
+    /**
+     * Returns a new context identical to this one except for the authenticated user identity.
+     */
+    public RequestContext withUserId(String authenticatedUserId) {
+        if (authenticatedUserId == null || authenticatedUserId.isBlank()) {
+            throw new IllegalArgumentException("authenticatedUserId must not be blank");
+        }
+        return new RequestContext(requestId, method, path, headers, queryParams, clientIp, timestamp, route,
+                Optional.of(authenticatedUserId));
     }
 
     private static Map<String, List<String>> immutableCaseInsensitiveCopy(Map<String, List<String>> source) {

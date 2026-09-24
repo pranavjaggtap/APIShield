@@ -26,5 +26,17 @@ spring:
               filters:
                 - RewritePath=/api/users/(?<segment>.*), /users/${segment}
 
+  # JWT authentication (com.apishield.auth.JwtAuthenticationFilter).
+  # No issuer is configured in this repository. Until one of the properties below is set,
+  # no JWT decoder exists and every routed request is rejected (fail closed; a warning is
+  # logged at startup). Configure exactly one source for your identity provider, e.g. via
+  # environment variables (Spring relaxed binding), without editing this file:
+  #   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://<idp>/realms/<realm>
+  #       (OIDC discovery; also validates the "iss" claim)
+  #   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=https://<idp>/.well-known/jwks.json
+  #   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_PUBLIC_KEY_LOCATION=file:/path/to/public-key.pem
+  # Recommended in production additionally:
+  #   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_AUDIENCES=<this API's audience>
+
 server:
   port: 8080

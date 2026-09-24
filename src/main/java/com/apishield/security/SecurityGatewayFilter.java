@@ -1,5 +1,6 @@
 package com.apishield.security;
 
+import com.apishield.auth.JwtAuthenticationFilter;
 import com.apishield.context.RequestContextAttributes;
 import com.apishield.context.RequestContextFilter;
 import com.apishield.model.Decision;
@@ -19,8 +20,9 @@ import java.nio.charset.StandardCharsets;
 /**
  * The sole point of contact between Spring Cloud Gateway and the security pipeline.
  * Applies to every route automatically as a {@link GlobalFilter} bean - no per-route
- * configuration needed. Runs immediately after {@link RequestContextFilter} and before routing,
- * evaluating the {@link com.apishield.context.RequestContext} that filter stored on the exchange.
+ * configuration needed. Runs after {@link RequestContextFilter} and {@link JwtAuthenticationFilter}
+ * and before routing, evaluating the (authenticated) {@link com.apishield.context.RequestContext}
+ * stored on the exchange.
  * <p>
  * On BLOCK, short-circuits with 403 and never invokes the {@link GatewayFilterChain}.
  * On ALLOW, delegates to the chain for normal routing. If no RequestContext is present (a
@@ -29,7 +31,7 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class SecurityGatewayFilter implements GlobalFilter, Ordered {
 
-    public static final int ORDER = RequestContextFilter.ORDER + 1;
+    public static final int ORDER = JwtAuthenticationFilter.ORDER + 1;
 
     private static final byte[] BLOCK_BODY =
             "{\"error\":\"Request blocked by APIShield\"}".getBytes(StandardCharsets.UTF_8);

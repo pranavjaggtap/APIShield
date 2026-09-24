@@ -180,6 +180,26 @@ class SecurityPipelineTest {
     }
 
     @Test
+    void authenticatedIdentityDoesNotChangeDetectorDecisions() {
+        RequestContext cleanRequest = contextFrom(MockServerHttpRequest.get("/api/users/1")
+                .header("User-Agent", "Mozilla/5.0 Chrome/120.0")
+                .header("Accept", "application/json")
+                .build());
+        RequestContext sqlInjection = contextFrom(MockServerHttpRequest.get("/api/users?id=1%27%20OR%20%271%27%3D%271")
+                .header("User-Agent", "Mozilla/5.0 Chrome/120.0")
+                .header("Accept", "application/json")
+                .build());
+        SecurityPipeline pipeline = pipelineWithRealStatelessDetectors();
+
+        StepVerifier.create(pipeline.evaluate(cleanRequest.withUserId("user-42")))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+        StepVerifier.create(pipeline.evaluate(sqlInjection.withUserId("user-42")))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .verifyComplete();
+    }
+
+    @Test
     void requestWithNoUserAgentAndNoAcceptHeadersIsStillBlockedByBotDetector() {
         RequestContext requestContext = contextFrom(MockServerHttpRequest.get("/api/users/1").build());
 

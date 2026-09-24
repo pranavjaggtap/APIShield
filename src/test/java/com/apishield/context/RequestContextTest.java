@@ -91,6 +91,36 @@ class RequestContextTest {
     }
 
     @Test
+    void withUserIdReturnsNewInstanceAndLeavesOriginalUnchanged() {
+        RouteInfo route = new RouteInfo("user-service", URI.create("http://localhost:8081"));
+        RequestContext original = new RequestContext("req-1", "GET", "/api/users/1",
+                Map.of("Accept", List.of("*/*")), Map.of("id", List.of("1")), "127.0.0.1",
+                Instant.parse("2026-01-01T00:00:00Z"), Optional.of(route), Optional.empty());
+
+        RequestContext authenticated = original.withUserId("user-42");
+
+        assertThat(authenticated).isNotSameAs(original);
+        assertThat(original.userId()).isEmpty();
+        assertThat(authenticated.userId()).contains("user-42");
+        assertThat(authenticated.requestId()).isEqualTo(original.requestId());
+        assertThat(authenticated.method()).isEqualTo(original.method());
+        assertThat(authenticated.path()).isEqualTo(original.path());
+        assertThat(authenticated.headers()).isEqualTo(original.headers());
+        assertThat(authenticated.queryParams()).isEqualTo(original.queryParams());
+        assertThat(authenticated.clientIp()).isEqualTo(original.clientIp());
+        assertThat(authenticated.timestamp()).isEqualTo(original.timestamp());
+        assertThat(authenticated.route()).isEqualTo(original.route());
+    }
+
+    @Test
+    void withUserIdRejectsBlankIdentity() {
+        RequestContext context = context(Map.of(), Map.of());
+
+        assertThatThrownBy(() -> context.withUserId(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> context.withUserId("  ")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void requiredFieldsRejectNull() {
         assertThatThrownBy(() -> new RequestContext(null, "GET", "/", Map.of(), Map.of(), "127.0.0.1",
                 Instant.now(), Optional.empty(), Optional.empty()))
