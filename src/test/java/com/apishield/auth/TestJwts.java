@@ -24,20 +24,20 @@ import java.util.function.Consumer;
  * Test-only JWT issuer. Key pairs are generated in memory per test run - no key material is
  * committed, and nothing here is reachable from production configuration.
  */
-final class TestJwts {
+public final class TestJwts {
 
-    static final KeyPair TRUSTED_KEYS = generateRsaKeyPair();
+    public static final KeyPair TRUSTED_KEYS = generateRsaKeyPair();
     private static final KeyPair UNTRUSTED_KEYS = generateRsaKeyPair();
 
     private TestJwts() {
     }
 
     /** A decoder that trusts only {@link #TRUSTED_KEYS}, with Spring's default validators (exp/nbf). */
-    static ReactiveJwtDecoder decoder() {
+    public static ReactiveJwtDecoder decoder() {
         return NimbusReactiveJwtDecoder.withPublicKey((RSAPublicKey) TRUSTED_KEYS.getPublic()).build();
     }
 
-    static String validToken(String subject) {
+    public static String validToken(String subject) {
         Instant now = Instant.now();
         return sign(TRUSTED_KEYS, claims -> claims.subject(subject)
                 .issuedAt(now.minus(Duration.ofMinutes(1)))
@@ -45,21 +45,21 @@ final class TestJwts {
     }
 
     /** Expired well beyond Spring's default 60-second clock skew allowance. */
-    static String expiredToken(String subject) {
+    public static String expiredToken(String subject) {
         Instant now = Instant.now();
         return sign(TRUSTED_KEYS, claims -> claims.subject(subject)
                 .issuedAt(now.minus(Duration.ofHours(2)))
                 .expiresAt(now.minus(Duration.ofHours(1))));
     }
 
-    static String tokenSignedByUntrustedKey(String subject) {
+    public static String tokenSignedByUntrustedKey(String subject) {
         Instant now = Instant.now();
         return sign(UNTRUSTED_KEYS, claims -> claims.subject(subject)
                 .issuedAt(now)
                 .expiresAt(now.plus(Duration.ofMinutes(5))));
     }
 
-    static String tokenWithoutSubject() {
+    public static String tokenWithoutSubject() {
         Instant now = Instant.now();
         return sign(TRUSTED_KEYS, claims -> claims.claim("scope", "read")
                 .issuedAt(now)

@@ -4,7 +4,11 @@ import com.apishield.context.RequestContext;
 import com.apishield.context.RequestContextFactory;
 import com.apishield.decision.DecisionEngine;
 import com.apishield.decision.DefaultDecisionEngine;
+import com.apishield.event.AsyncSecurityEventRecorder;
+import com.apishield.event.SecurityEventRecorder;
+import com.apishield.event.SecurityEventRepository;
 import com.apishield.model.Decision;
+import com.apishield.model.RiskScore;
 import com.apishield.model.SecurityAnalysisContext;
 import com.apishield.model.ThreatSignal;
 import com.apishield.risk.ContextualRiskScoreEngine;
@@ -21,18 +25,30 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class SecurityPipelineTest {
 
     private final RiskScoreEngine riskScoreEngine = new ContextualRiskScoreEngine();
     private final DecisionEngine decisionEngine = new DefaultDecisionEngine();
+
+    private record Recorded(RequestContext request, RiskScore riskScore, Decision decision) {
+    }
+
+    private final List<Recorded> recorded = new CopyOnWriteArrayList<>();
+    private final SecurityEventRecorder recorder =
+            (request, riskScore, decision) -> recorded.add(new Recorded(request, riskScore, decision));
 
     private final RequestContext context = new RequestContext(
             "req-1", "GET", "/api/users/1", Map.of(), Map.of(), "127.0.0.1", Instant.now(),
@@ -45,12 +61,12 @@ class SecurityPipelineTest {
     private SecurityPipeline pipelineWithRealStatelessDetectors() {
         return new SecurityPipeline(
                 List.of(new SqlInjectionDetector(), new XssDetector(), new BotAutomationDetector()),
-                riskScoreEngine, decisionEngine);
+                riskScoreEngine, decisionEngine, recorder);
     }
 
     @Test
     void zeroDetectorsResultInAllow() {
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
@@ -61,7 +77,7 @@ class SecurityPipelineTest {
     void combinesMultipleDetectorSignalsIntoDecision() {
         ThreatDetector clean = ctx -> Mono.just(new ThreatSignal("clean-detector", false, 0.0, "ok"));
         ThreatDetector highThreat = ctx -> Mono.just(new ThreatSignal("threat-detector", true, 0.9, "bad"));
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(clean, highThreat), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(clean, highThreat), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
@@ -71,7 +87,7 @@ class SecurityPipelineTest {
     @Test
     void lowSeverityThreatsRemainBelowThresholdAndAllow() {
         ThreatDetector minor = ctx -> Mono.just(new ThreatSignal("minor-detector", true, 0.1, "low risk"));
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(minor), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(minor), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
@@ -81,7 +97,7 @@ class SecurityPipelineTest {
     @Test
     void detectorFailureFailsClosed() {
         ThreatDetector failing = ctx -> Mono.error(new RuntimeException("boom"));
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(failing), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(failing), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
@@ -92,7 +108,7 @@ class SecurityPipelineTest {
     void oneFailingDetectorFailsClosedEvenIfOthersAreClean() {
         ThreatDetector clean = ctx -> Mono.just(new ThreatSignal("clean-detector", false, 0.0, "ok"));
         ThreatDetector failing = ctx -> Mono.error(new RuntimeException("boom"));
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(clean, failing), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(clean, failing), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
@@ -113,7 +129,7 @@ class SecurityPipelineTest {
             received.set(ctx);
             return Mono.just(new ThreatSignal("recording", false, 0.0, "ok"));
         };
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(recording), riskScoreEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(recording), riskScoreEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(requestContext))
                 .expectNextCount(1)
@@ -136,7 +152,7 @@ class SecurityPipelineTest {
             received.set(riskContext);
             return riskScoreEngine.score(signals, riskContext);
         };
-        SecurityPipeline pipeline = new SecurityPipeline(List.of(), recordingEngine, decisionEngine);
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(), recordingEngine, decisionEngine, recorder);
 
         StepVerifier.create(pipeline.evaluate(context))
                 .expectNextCount(1)
@@ -224,5 +240,108 @@ class SecurityPipelineTest {
         StepVerifier.create(pipelineWithRealStatelessDetectors().evaluate(requestContext))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
                 .verifyComplete();
+    }
+
+    // --- security event recording ------------------------------------------------------------
+
+    @Test
+    void allowedDecisionIsRecordedWithItsContextAndRiskScore() {
+        RequestContext authenticated = context.withUserId("user-42");
+        ThreatDetector minor = ctx -> Mono.just(new ThreatSignal("minor-detector", true, 0.2, "low risk"));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(minor), riskScoreEngine, decisionEngine, recorder);
+
+        StepVerifier.create(pipeline.evaluate(authenticated))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+
+        assertThat(recorded).hasSize(1);
+        Recorded event = recorded.get(0);
+        assertThat(event.request()).isSameAs(authenticated);
+        assertThat(event.decision().outcome()).isEqualTo(Decision.Outcome.ALLOW);
+        assertThat(event.riskScore().value()).isEqualTo(0.2);
+        assertThat(event.riskScore().contributingSignals()).extracting(ThreatSignal::detectorName)
+                .containsExactly("minor-detector");
+    }
+
+    @Test
+    void blockedDecisionIsRecordedExactlyAsReturned() {
+        ThreatDetector clean = ctx -> Mono.just(new ThreatSignal("clean-detector", false, 0.0, "ok"));
+        ThreatDetector high = ctx -> Mono.just(new ThreatSignal("threat-detector", true, 0.9, "bad"));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(clean, high), riskScoreEngine, decisionEngine, recorder);
+        AtomicReference<Decision> returned = new AtomicReference<>();
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .consumeNextWith(returned::set)
+                .verifyComplete();
+
+        assertThat(returned.get().outcome()).isEqualTo(Decision.Outcome.BLOCK);
+        assertThat(recorded).hasSize(1);
+        assertThat(recorded.get(0).decision()).isEqualTo(returned.get());
+        assertThat(recorded.get(0).riskScore().value()).isEqualTo(0.9);
+        assertThat(recorded.get(0).riskScore().contributingSignals()).hasSize(2);
+    }
+
+    @Test
+    void throwingRecorderDoesNotChangeBlockDecision() {
+        SecurityEventRecorder throwing = (request, riskScore, decision) -> {
+            throw new IllegalStateException("database down");
+        };
+        ThreatDetector high = ctx -> Mono.just(new ThreatSignal("threat-detector", true, 0.9, "bad"));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(high), riskScoreEngine, decisionEngine, throwing);
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .verifyComplete();
+    }
+
+    @Test
+    void throwingRecorderDoesNotChangeAllowDecision() {
+        SecurityEventRecorder throwing = (request, riskScore, decision) -> {
+            throw new IllegalStateException("database down");
+        };
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(), riskScoreEngine, decisionEngine, throwing);
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+    }
+
+    @Test
+    void failingDatabaseSaveDoesNotChangeBlockDecision() {
+        SecurityEventRepository repository = mock(SecurityEventRepository.class);
+        when(repository.save(any())).thenReturn(Mono.error(new RuntimeException("connection refused")));
+        ThreatDetector high = ctx -> Mono.just(new ThreatSignal("threat-detector", true, 0.9, "bad"));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(high), riskScoreEngine, decisionEngine,
+                new AsyncSecurityEventRecorder(repository));
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .verifyComplete();
+    }
+
+    @Test
+    void failingDatabaseSaveDoesNotChangeAllowDecision() {
+        SecurityEventRepository repository = mock(SecurityEventRepository.class);
+        when(repository.save(any())).thenReturn(Mono.error(new RuntimeException("connection refused")));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(), riskScoreEngine, decisionEngine,
+                new AsyncSecurityEventRecorder(repository));
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+    }
+
+    @Test
+    void hangingDatabaseDoesNotDelayTheDecision() {
+        SecurityEventRepository repository = mock(SecurityEventRepository.class);
+        when(repository.save(any())).thenReturn(Mono.never());
+        ThreatDetector high = ctx -> Mono.just(new ThreatSignal("threat-detector", true, 0.9, "bad"));
+        SecurityPipeline pipeline = new SecurityPipeline(List.of(high), riskScoreEngine, decisionEngine,
+                new AsyncSecurityEventRecorder(repository, Duration.ofMinutes(5), 10));
+
+        StepVerifier.create(pipeline.evaluate(context))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .expectComplete()
+                .verify(Duration.ofSeconds(2));
     }
 }
