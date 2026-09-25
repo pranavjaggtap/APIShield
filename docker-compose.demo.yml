@@ -1,0 +1,32 @@
+# =====================================================================================
+#  LOCAL DEVELOPMENT / DEMO ONLY - DO NOT USE IN PRODUCTION
+# =====================================================================================
+# Opt-in overlay that lets APIShield validate JWTs minted locally by scripts/demo-jwt.sh,
+# for authenticated end-to-end testing. Without this file, docker-compose.yml configures no
+# JWT decoder and APIShield rejects every routed request with 401 (fail closed).
+#
+#   scripts/demo-jwt.sh keys
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+#   TOKEN=$(scripts/demo-jwt.sh token alice)
+#   curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/users/1
+#
+# Only the demo PUBLIC key is mounted (read-only); its private key never leaves demo/jwt/ on
+# the host, which is git-ignored and docker-ignored. Anyone holding that private key can mint
+# tokens this configuration accepts - which is exactly why it is for local demos only.
+# Production must instead point APIShield at its real identity provider (issuer-uri or
+# jwk-set-uri) - see the JWT section of src/main/resources/application.yml.
+
+services:
+  apishield:
+    environment:
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_PUBLIC_KEY_LOCATION: file:/etc/apishield/demo-jwt/public.pem
+      # Only tokens minted for the demo audience are accepted (matches scripts/demo-jwt.sh).
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_AUDIENCES: apishield-demo
+    volumes:
+      - type: bind
+        source: ./demo/jwt/public.pem
+        target: /etc/apishield/demo-jwt/public.pem
+        read_only: true
+        bind:
+          # Fail instead of silently creating an empty directory when the key is missing.
+          create_host_path: false

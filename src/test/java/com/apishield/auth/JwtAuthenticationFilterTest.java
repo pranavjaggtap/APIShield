@@ -11,7 +11,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
@@ -51,6 +50,11 @@ class JwtAuthenticationFilterTest {
     }
 
     private void assertRejectedWith401(MockServerWebExchange exchange, String expectedWwwAuthenticate) {
+        assertRejectedWith401(filter, exchange, expectedWwwAuthenticate);
+    }
+
+    private static void assertRejectedWith401(JwtAuthenticationFilter filter, MockServerWebExchange exchange,
+                                              String expectedWwwAuthenticate) {
         AtomicBoolean chainCalled = new AtomicBoolean(false);
 
         StepVerifier.create(filter.filter(exchange, recordingChain(chainCalled)))
@@ -188,19 +192,36 @@ class JwtAuthenticationFilterTest {
         assertRejectedWith401(exchange("Bearer " + TestJwts.tokenWithoutSubject()), "Bearer error=\"invalid_token\"");
     }
 
-    // --- server-side failures fail closed ----------------------------------------------------
+    // --- no decoder configured: 401, never 500, never routed -----------------------------------
+
+    private final JwtAuthenticationFilter unconfigured = new JwtAuthenticationFilter((ReactiveJwtDecoder) null);
 
     @Test
-    void noConfiguredDecoderFailsClosedWithoutRouting() {
-        JwtAuthenticationFilter unconfigured = new JwtAuthenticationFilter((ReactiveJwtDecoder) null);
+    void noDecoderAndNoAuthorizationHeaderIsRejectedWith401() {
+        MockServerWebExchange exchange = exchange(null);
+
+        assertRejectedWith401(unconfigured, exchange, "Bearer");
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+                .doesNotContain("error=");
+    }
+
+    @Test
+    void noDecoderAndNonBearerSchemeIsRejectedWith401() {
+        MockServerWebExchange exchange = exchange("Basic dXNlcjpwYXNz");
+
+        assertRejectedWith401(unconfigured, exchange, "Bearer");
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+                .doesNotContain("error=");
+    }
+
+    @Test
+    void noDecoderRejectsEvenAWellFormedTokenWith401InvalidToken() {
         MockServerWebExchange exchange = exchange("Bearer " + TestJwts.validToken("user-42"));
-        AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-        StepVerifier.create(unconfigured.filter(exchange, recordingChain(chainCalled)))
-                .expectError(AuthenticationServiceException.class)
-                .verify();
-
-        assertThat(chainCalled.get()).isFalse();
+        assertRejectedWith401(unconfigured, exchange, "Bearer error=\"invalid_token\"");
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+                .as("must not reveal server configuration to clients")
+                .doesNotContainIgnoringCase("decoder");
     }
 
     @Test

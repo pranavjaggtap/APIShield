@@ -66,7 +66,7 @@ public final class TestJwts {
                 .expiresAt(now.plus(Duration.ofMinutes(5))));
     }
 
-    private static String sign(KeyPair keys, Consumer<JwtClaimsSet.Builder> claimsCustomizer) {
+    static String sign(KeyPair keys, Consumer<JwtClaimsSet.Builder> claimsCustomizer) {
         RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) keys.getPublic())
                 .privateKey((RSAPrivateKey) keys.getPrivate())
                 .build();
@@ -77,7 +77,7 @@ public final class TestJwts {
         return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
     }
 
-    private static KeyPair generateRsaKeyPair() {
+    static KeyPair generateRsaKeyPair() {
         try {
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
             generator.initialize(2048);

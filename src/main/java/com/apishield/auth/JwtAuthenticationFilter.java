@@ -50,9 +50,12 @@ import reactor.core.publisher.Mono;
  *       {@code WWW-Authenticate: Bearer}.</li>
  *   <li>Malformed header/JWT, expired JWT, invalid signature, or no {@code sub} claim: 401,
  *       {@code WWW-Authenticate: Bearer error="invalid_token"}.</li>
- *   <li>Server-side failure (no decoder configured, JWK set unreachable): the error propagates and
- *       the request is never routed - fail closed, but not misreported as a client credential problem.</li>
+ *   <li>No decoder configured: no token can be validated, so the two cases above apply - 401
+ *       {@code Bearer} without a token, 401 {@code Bearer error="invalid_token"} with one.</li>
+ *   <li>Server-side failure of a configured decoder (e.g. JWK set unreachable): the error propagates
+ *       and the request is never routed - fail closed, but not misreported as a client credential problem.</li>
  * </ul>
+ * In every non-authenticated case the chain is not invoked, so the request is never routed.
  * Tokens are never logged and never stored: the RequestContext excludes the Authorization header
  * by construction, and only the {@code sub} claim is copied into it.
  */
@@ -63,13 +66,21 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
+    /**
+     * Used when no decoder is configured: no bearer token can be validated, so every one is rejected
+     * as an invalid token (401). The description is deliberately generic - it must not reveal the
+     * server's configuration to clients.
+     */
+    private static final ReactiveAuthenticationManager REJECT_ALL_TOKENS = authentication ->
+            Mono.error(new InvalidBearerTokenException("The bearer token could not be validated"));
+
     private final ServerAuthenticationConverter bearerTokenConverter = new ServerBearerTokenAuthenticationConverter();
     private final ServerAuthenticationEntryPoint entryPoint = new BearerTokenServerAuthenticationEntryPoint();
     private final ReactiveAuthenticationManager authenticationManager;
 
     /**
      * The decoder is Spring Boot's auto-configured one (see application.yml for the properties that
-     * create it). Optional so the application still starts without one - see {@link #authenticate}.
+     * create it). Optional so the application still starts without one - see {@link #REJECT_ALL_TOKENS}.
      */
     @Autowired
     public JwtAuthenticationFilter(ObjectProvider<ReactiveJwtDecoder> jwtDecoder) {
@@ -79,8 +90,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     public JwtAuthenticationFilter(ReactiveJwtDecoder jwtDecoder) {
         if (jwtDecoder == null) {
             log.warn("No JWT decoder configured (spring.security.oauth2.resourceserver.jwt.*) - "
-                    + "every routed request will be rejected until one is configured");
-            this.authenticationManager = null;
+                    + "every routed request will be rejected with 401 until one is configured");
+            this.authenticationManager = REJECT_ALL_TOKENS;
         } else {
             this.authenticationManager = new JwtReactiveAuthenticationManager(jwtDecoder);
         }
@@ -95,9 +106,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<JwtAuthenticationToken> authenticate(ServerWebExchange exchange) {
-        if (authenticationManager == null) {
-            return Mono.error(new AuthenticationServiceException("No JWT decoder configured"));
-        }
         return bearerTokenConverter.convert(exchange)
                 .switchIfEmpty(Mono.error(() -> new AuthenticationCredentialsNotFoundException("Bearer token is missing")))
                 .flatMap(authenticationManager::authenticate)
