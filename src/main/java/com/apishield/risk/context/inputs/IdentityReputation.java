@@ -5,8 +5,11 @@ import com.apishield.risk.context.ContextualInput;
 import java.util.Objects;
 
 /**
- * Reputation of an authenticated user. No provider supplies this yet (there is no reputation data
- * source), so it is currently always missing - and missing reputation is neutral.
+ * Reputation of an authenticated user. Deliberately has no provider: APIShield has no authoritative
+ * identity-reputation source, and none is derived from its own security events (that history is covered,
+ * with its limitations, by ClientHistory/ThreatHistory). It is therefore always missing - and missing
+ * reputation is neutral. A provider should only be added for a real external source (e.g. an IdP or
+ * fraud-scoring service).
  */
 public record IdentityReputation(String userId, Level level) implements ContextualInput {
 

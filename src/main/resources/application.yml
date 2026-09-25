@@ -55,3 +55,10 @@ apishield:
     #   route-sensitivity:
     #     user-service: HIGH
     route-sensitivity: {}
+    # PostgreSQL client/threat history providers (aggregate queries over security_events).
+    # Their only effect is through priors, so while contextual-priors-enabled is false they would
+    # add database work to every request without changing any score. Enabling them does NOT
+    # enable priors. Identity reputation has no data source and stays missing (neutral).
+    history-providers-enabled: false
+    # How far back history looks, from each request's own timestamp.
+    history-window: 1h

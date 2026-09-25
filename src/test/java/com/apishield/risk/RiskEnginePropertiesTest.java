@@ -26,6 +26,33 @@ class RiskEnginePropertiesTest {
         assertThat(properties.contextualPriorsEnabled()).isFalse();
         assertThat(properties.providerTimeout()).isEqualTo(Duration.ofMillis(100));
         assertThat(properties.routeSensitivity()).isEmpty();
+        assertThat(properties.historyProvidersEnabled()).isFalse();
+        assertThat(properties.historyWindow()).isEqualTo(Duration.ofHours(1));
+    }
+
+    @Test
+    void enablingHistoryProvidersLeavesPriorsDisabled() {
+        RiskEngineProperties properties = bind(Map.of(
+                "apishield.risk.history-providers-enabled", "true",
+                "apishield.risk.history-window", "15m"));
+
+        assertThat(properties.historyProvidersEnabled()).isTrue();
+        assertThat(properties.historyWindow()).isEqualTo(Duration.ofMinutes(15));
+        assertThat(properties.contextualPriorsEnabled()).isFalse();
+    }
+
+    @Test
+    void rejectsNonPositiveHistoryWindow() {
+        assertThatThrownBy(() -> bind(Map.of("apishield.risk.history-window", "0s")))
+                .isInstanceOf(BindException.class);
+    }
+
+    @Test
+    void convenienceConstructorKeepsHistoryDisabled() {
+        RiskEngineProperties properties = new RiskEngineProperties(false, Duration.ofMillis(100), Map.of());
+
+        assertThat(properties.historyProvidersEnabled()).isFalse();
+        assertThat(properties.historyWindow()).isEqualTo(RiskEngineProperties.DEFAULT_HISTORY_WINDOW);
     }
 
     @Test

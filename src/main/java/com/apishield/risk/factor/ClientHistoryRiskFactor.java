@@ -21,10 +21,11 @@ import java.util.Optional;
  * scores {@code 1 - 0.7^2 = 0.51} for a request that carries no threat at all, which would BLOCK. What
  * keeps it safe is that contextual priors are disabled by default
  * ({@code apishield.risk.contextual-priors-enabled=false}): while disabled the engine records the
- * proposed prior but applies 0. No provider supplies {@link ClientHistory} yet, so today this factor is
- * always MISSING.
+ * proposed prior but applies 0. {@link ClientHistory} is supplied by ClientHistoryProvider only when
+ * {@code apishield.risk.history-providers-enabled=true} (default false); otherwise this factor is MISSING.
  * <p>
- * Phase 4 requirements - must be resolved before a ClientHistory provider exists or priors are enabled:
+ * Open requirements - a PostgreSQL ClientHistoryProvider now exists (opt-in), so these must be resolved
+ * before contextual priors are enabled:
  * <ul>
  *   <li><b>Double counting:</b> this factor and {@link ThreatHistoryRiskFactor} are both derived from
  *       blocked requests, yet the engine combines their priors as independent evidence (noisy-OR), so the

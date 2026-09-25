@@ -8,7 +8,8 @@ import java.util.Objects;
 
 /**
  * Recent traffic of one client ({@link ClientKey}) within a window: how many of its requests were
- * evaluated and how many of those were blocked. No provider supplies this yet.
+ * evaluated and how many of those were blocked. Supplied by ClientHistoryProvider (PostgreSQL) when
+ * {@code apishield.risk.history-providers-enabled=true}; otherwise absent.
  */
 public record ClientHistory(ClientKey clientKey, long requestsInWindow, long blockedInWindow, Duration window)
         implements ContextualInput {

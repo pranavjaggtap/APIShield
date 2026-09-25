@@ -7,8 +7,9 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * How many of one client's ({@link ClientKey}) recent requests within a window were blocked as
- * threats. No provider supplies this yet.
+ * How many of one client's ({@link ClientKey}) recent requests within a window carried detector evidence
+ * at or above the BLOCK threshold (detector-only threat score, before context). Supplied by ThreatHistoryProvider (PostgreSQL) when
+ * {@code apishield.risk.history-providers-enabled=true}; otherwise absent.
  */
 public record ThreatHistory(ClientKey clientKey, long recentThreatCount, Duration window) implements ContextualInput {
 
