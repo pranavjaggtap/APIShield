@@ -13,7 +13,13 @@ import com.apishield.model.SecurityAnalysisContext;
 import com.apishield.model.ThreatSignal;
 import com.apishield.risk.ContextualRiskScoreEngine;
 import com.apishield.risk.RiskScoreEngine;
+import com.apishield.risk.RiskTestContexts;
+import com.apishield.risk.context.ContextualInputCollector;
+import com.apishield.risk.context.ContextualInputProvider;
 import com.apishield.risk.context.RiskContext;
+import com.apishield.risk.context.inputs.RouteProfile;
+import com.apishield.risk.factor.IdentityRiskFactor;
+import com.apishield.risk.factor.RouteSensitivityRiskFactor;
 import com.apishield.threat.BotAutomationDetector;
 import com.apishield.threat.SqlInjectionDetector;
 import com.apishield.threat.ThreatDetector;
@@ -343,5 +349,76 @@ class SecurityPipelineTest {
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
                 .expectComplete()
                 .verify(Duration.ofSeconds(2));
+    }
+
+    // --- contextual inputs (Phase 2) ------------------------------------------------------------
+
+    private static final RequestContext ALICE_ON_USER_SERVICE = RiskTestContexts.authenticated("alice");
+
+    private static ContextualInputProvider<RouteProfile> routeProvider(Mono<RouteProfile> result) {
+        return new ContextualInputProvider<>() {
+            @Override
+            public Class<RouteProfile> type() {
+                return RouteProfile.class;
+            }
+
+            @Override
+            public Mono<RouteProfile> provide(RequestContext request) {
+                return result;
+            }
+        };
+    }
+
+    private SecurityPipeline contextualPipeline(double severity, ContextualInputCollector collector) {
+        ThreatDetector detector = ctx -> Mono.just(new ThreatSignal("bot-automation", true, severity, "matched"));
+        RiskScoreEngine contextualEngine = new ContextualRiskScoreEngine(
+                List.of(new RouteSensitivityRiskFactor(), new IdentityRiskFactor()), false);
+        return new SecurityPipeline(List.of(detector), contextualEngine, decisionEngine, recorder, collector);
+    }
+
+    @Test
+    void contextualInputsReachTheEngineAndCanChangeTheScore() {
+        ContextualInputCollector highRoute = new ContextualInputCollector(List.of(routeProvider(
+                Mono.just(new RouteProfile(RiskTestContexts.ROUTE_ID, RouteProfile.Sensitivity.HIGH)))), Duration.ofSeconds(1));
+
+        StepVerifier.create(contextualPipeline(0.4, highRoute).evaluate(ALICE_ON_USER_SERVICE))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .verifyComplete();
+        StepVerifier.create(contextualPipeline(0.4, ContextualInputCollector.none()).evaluate(ALICE_ON_USER_SERVICE))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+
+        assertThat(recorded.get(0).riskScore().contextMultiplier()).isEqualTo(1.5);
+        assertThat(recorded.get(1).riskScore().value()).isEqualTo(0.4);
+    }
+
+    @Test
+    void failingProviderDegradesContextButNeitherBlocksNorChangesTheDecision() {
+        ContextualInputCollector failing = new ContextualInputCollector(
+                List.of(routeProvider(Mono.error(new IllegalStateException("config store down")))), Duration.ofSeconds(1));
+
+        StepVerifier.create(contextualPipeline(0.4, failing).evaluate(ALICE_ON_USER_SERVICE))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .verifyComplete();
+        StepVerifier.create(contextualPipeline(0.9, failing).evaluate(ALICE_ON_USER_SERVICE))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .verifyComplete();
+
+        assertThat(recorded).allSatisfy(event -> assertThat(event.riskScore().degraded()).isTrue());
+        assertThat(recorded.get(0).riskScore().value()).isEqualTo(0.4);
+        assertThat(recorded.get(1).riskScore().value()).isEqualTo(0.9);
+    }
+
+    @Test
+    void hangingProviderTimesOutWithoutBlockingTheRequest() {
+        ContextualInputCollector hanging = new ContextualInputCollector(
+                List.of(routeProvider(Mono.never())), Duration.ofMillis(50));
+
+        StepVerifier.create(contextualPipeline(0.9, hanging).evaluate(ALICE_ON_USER_SERVICE))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .expectComplete()
+                .verify(Duration.ofSeconds(2));
+
+        assertThat(recorded.get(0).riskScore().degraded()).isTrue();
     }
 }

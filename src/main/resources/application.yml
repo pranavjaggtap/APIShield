@@ -40,3 +40,18 @@ spring:
 
 server:
   port: 8080
+
+apishield:
+  risk:
+    # Contextual risk engine (com.apishield.risk.RiskEngineProperties).
+    # Baseline priors from client/threat history. Keep false until multi-tier decisions
+    # (MONITOR/CHALLENGE/THROTTLE) exist: with a single ALLOW/BLOCK threshold a prior alone
+    # could block a request that carries no threat.
+    contextual-priors-enabled: false
+    # Budget per contextual input provider; slower/failed inputs count as missing (neutral).
+    provider-timeout: 100ms
+    # Gateway route id -> NORMAL | HIGH (x1.5) | CRITICAL (x2.0) threat-evidence multiplier.
+    # Unlisted routes are neutral. Example:
+    #   route-sensitivity:
+    #     user-service: HIGH
+    route-sensitivity: {}

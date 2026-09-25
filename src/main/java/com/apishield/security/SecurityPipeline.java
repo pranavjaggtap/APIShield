@@ -8,10 +8,12 @@ import com.apishield.model.RiskScore;
 import com.apishield.model.SecurityAnalysisContext;
 import com.apishield.model.ThreatSignal;
 import com.apishield.risk.RiskScoreEngine;
+import com.apishield.risk.context.ContextualInputCollector;
 import com.apishield.risk.context.RiskContext;
 import com.apishield.threat.ThreatDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,6 +31,9 @@ import java.util.List;
  * maximum-severity threat signal rather than being silently dropped, so a broken detector
  * cannot cause a request to be allowed unexamined.
  * <p>
+ * Contextual inputs are gathered by the {@link ContextualInputCollector} in parallel with the detectors,
+ * before scoring; the collector never fails, so an unavailable input only degrades the context.
+ * <p>
  * Once the decision is made it is handed to the {@link SecurityEventRecorder}, whose outcome is
  * never awaited and cannot fail this pipeline: the decision returned is always exactly the one the
  * DecisionEngine produced, whatever happens to the recording.
@@ -42,21 +47,33 @@ public class SecurityPipeline {
     private final RiskScoreEngine riskScoreEngine;
     private final DecisionEngine decisionEngine;
     private final SecurityEventRecorder securityEventRecorder;
+    private final ContextualInputCollector contextualInputCollector;
 
+    /** Without contextual input providers - every request is scored with empty contextual inputs. */
     public SecurityPipeline(List<ThreatDetector> detectors, RiskScoreEngine riskScoreEngine,
                             DecisionEngine decisionEngine, SecurityEventRecorder securityEventRecorder) {
+        this(detectors, riskScoreEngine, decisionEngine, securityEventRecorder, ContextualInputCollector.none());
+    }
+
+    @Autowired
+    public SecurityPipeline(List<ThreatDetector> detectors, RiskScoreEngine riskScoreEngine,
+                            DecisionEngine decisionEngine, SecurityEventRecorder securityEventRecorder,
+                            ContextualInputCollector contextualInputCollector) {
         this.detectors = detectors;
         this.riskScoreEngine = riskScoreEngine;
         this.decisionEngine = decisionEngine;
         this.securityEventRecorder = securityEventRecorder;
+        this.contextualInputCollector = contextualInputCollector;
     }
 
     public Mono<Decision> evaluate(RequestContext requestContext) {
         SecurityAnalysisContext context = SecurityAnalysisContext.from(requestContext);
-        return Flux.fromIterable(detectors)
+        Mono<List<ThreatSignal>> signals = Flux.fromIterable(detectors)
                 .flatMap(detector -> safeDetect(detector, context))
-                .collectList()
-                .map(signals -> riskScoreEngine.score(signals, RiskContext.withoutInputs(requestContext)))
+                .collectList();
+        return Mono.zip(signals, contextualInputCollector.collect(requestContext))
+                .map(collected -> riskScoreEngine.score(collected.getT1(),
+                        new RiskContext(requestContext, collected.getT2())))
                 .map(riskScore -> {
                     Decision decision = decisionEngine.decide(riskScore);
                     recordSafely(requestContext, riskScore, decision);

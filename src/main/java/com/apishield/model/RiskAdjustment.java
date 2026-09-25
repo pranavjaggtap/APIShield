@@ -7,7 +7,7 @@ import java.util.Objects;
  * threat evidence (1.0 = neutral) and/or a baseline prior risk (0.0 = none), with the reason.
  * Recorded per factor so every score is explainable.
  * <p>
- * No risk factors exist yet, so {@link RiskScore#adjustments()} is always empty for now.
+ * Missing data is always neutral: {@link #missing} has multiplier 1.0, prior 0.0.
  */
 public record RiskAdjustment(
         String factor,
@@ -36,5 +36,23 @@ public record RiskAdjustment(
         if (!(prior >= 0.0 && prior <= 1.0)) {
             throw new IllegalArgumentException("prior must be within [0,1], was " + prior);
         }
+    }
+
+    /** The factor's data was unavailable - neutral by definition. */
+    public static RiskAdjustment missing(String factor, String reason) {
+        return new RiskAdjustment(factor, 1.0, 0.0, Availability.MISSING, reason);
+    }
+
+    /** The factor had its data and it called for no change. */
+    public static RiskAdjustment neutral(String factor, String reason) {
+        return new RiskAdjustment(factor, 1.0, 0.0, Availability.NEUTRAL, reason);
+    }
+
+    public static RiskAdjustment multiplier(String factor, double multiplier, String reason) {
+        return new RiskAdjustment(factor, multiplier, 0.0, Availability.APPLIED, reason);
+    }
+
+    public static RiskAdjustment prior(String factor, double prior, String reason) {
+        return new RiskAdjustment(factor, 1.0, prior, Availability.APPLIED, reason);
     }
 }
