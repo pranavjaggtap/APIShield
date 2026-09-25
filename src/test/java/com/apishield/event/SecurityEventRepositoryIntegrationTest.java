@@ -105,7 +105,9 @@ class SecurityEventRepositoryIntegrationTest {
         List<SecurityEvent> all = own(repository.findAllByOrderByOccurredAtDescIdDesc(PageRequest.of(0, 100))
                 .collectList().block());
 
-        SecurityEvent tiedHigherId = tiedA.id().compareTo(tiedB.id()) > 0 ? tiedA : tiedB;
+        // PostgreSQL orders UUIDs as unsigned bytes; Java's UUID.compareTo compares signed longs and
+        // disagrees whenever the leading hex digit is >= 8. Canonical lowercase strings order like PostgreSQL.
+        SecurityEvent tiedHigherId = tiedA.id().toString().compareTo(tiedB.id().toString()) > 0 ? tiedA : tiedB;
         SecurityEvent tiedLowerId = tiedHigherId == tiedA ? tiedB : tiedA;
         assertThat(all).containsExactly(newest, tiedHigherId, tiedLowerId, oldest);
 
