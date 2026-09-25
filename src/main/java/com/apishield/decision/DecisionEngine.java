@@ -4,9 +4,9 @@ import com.apishield.model.Decision;
 import com.apishield.model.RiskScore;
 
 /**
- * Turns a {@link RiskScore} into an ALLOW/BLOCK {@link Decision}. Deliberately synchronous,
- * same rationale as {@link com.apishield.risk.RiskScoreEngine}: pure function over
- * already-available data, independently unit-testable.
+ * Turns a {@link RiskScore} into a {@link Decision} (ALLOW, MONITOR, CHALLENGE, THROTTLE or BLOCK).
+ * Deliberately synchronous, same rationale as {@link com.apishield.risk.RiskScoreEngine}: pure function
+ * over already-available data, independently unit-testable.
  */
 public interface DecisionEngine {
 

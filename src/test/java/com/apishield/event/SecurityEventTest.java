@@ -118,6 +118,17 @@ class SecurityEventTest {
     }
 
     @Test
+    void everyFiveTierOutcomeIsStoredByNameInTheExistingDecisionColumn() {
+        for (Decision.Outcome outcome : Decision.Outcome.values()) {
+            SecurityEvent event = SecurityEvent.create(request(Optional.of("user-42")),
+                    RiskScore.fromSignalsOnly(0.5, List.of(BOT)), new Decision(outcome, "reason for " + outcome));
+
+            assertThat(event.decision()).isEqualTo(outcome.name());
+            assertThat(event.decisionReason()).isEqualTo("reason for " + outcome);
+        }
+    }
+
+    @Test
     void signalArraysMustStayAligned() {
         assertThatThrownBy(() -> new SecurityEvent(null, "req-1", TIMESTAMP, "GET", "/", "10.0.0.5", null, null,
                 "ALLOW", "ok", 0.0, 0.0, List.of("a", "b"), List.of(true), List.of(0.1, 0.2), List.of("x", "y")))

@@ -174,6 +174,22 @@ class SecurityEventControllerTest {
     }
 
     @Test
+    void decisionFilterAcceptsTheNewFiveTierOutcomes() {
+        for (String decision : List.of("MONITOR", "CHALLENGE", "THROTTLE")) {
+            when(repository.findByDecisionOrderByOccurredAtDescIdDesc(decision, PageRequest.of(0, 20)))
+                    .thenReturn(Flux.empty());
+            when(repository.countByDecision(decision)).thenReturn(Mono.just(0L));
+
+            client.get().uri("/api/security/events?decision=" + decision)
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody().jsonPath("$.totalElements").isEqualTo(0);
+
+            verify(repository).findByDecisionOrderByOccurredAtDescIdDesc(decision, PageRequest.of(0, 20));
+        }
+    }
+
+    @Test
     void noMutationEndpointsExist() {
         client.post().uri("/api/security/events").exchange().expectStatus().isEqualTo(405);
         client.delete().uri("/api/security/events/{id}", NEWER_ID).exchange().expectStatus().isEqualTo(405);

@@ -240,11 +240,13 @@ class SecurityPipelineTest {
     }
 
     @Test
-    void requestWithNoUserAgentAndNoAcceptHeadersIsStillBlockedByBotDetector() {
+    void requestWithNoUserAgentAndNoAcceptHeadersIsChallengedByBotDetector() {
+        // Bot detector severity 0.5 (missing User-Agent + missing browser headers). BLOCK under the former
+        // single 0.50 threshold; CHALLENGE ([0.50, 0.65)) under the five-tier model.
         RequestContext requestContext = contextFrom(MockServerHttpRequest.get("/api/users/1").build());
 
         StepVerifier.create(pipelineWithRealStatelessDetectors().evaluate(requestContext))
-                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.CHALLENGE))
                 .verifyComplete();
     }
 
@@ -381,11 +383,12 @@ class SecurityPipelineTest {
         ContextualInputCollector highRoute = new ContextualInputCollector(List.of(routeProvider(
                 Mono.just(new RouteProfile(RiskTestContexts.ROUTE_ID, RouteProfile.Sensitivity.HIGH)))), Duration.ofSeconds(1));
 
+        // 0.4 on a HIGH route scores 0.535 (CHALLENGE); without context it stays 0.4 (MONITOR).
         StepVerifier.create(contextualPipeline(0.4, highRoute).evaluate(ALICE_ON_USER_SERVICE))
-                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.CHALLENGE))
                 .verifyComplete();
         StepVerifier.create(contextualPipeline(0.4, ContextualInputCollector.none()).evaluate(ALICE_ON_USER_SERVICE))
-                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.MONITOR))
                 .verifyComplete();
 
         assertThat(recorded.get(0).riskScore().contextMultiplier()).isEqualTo(1.5);
@@ -398,7 +401,7 @@ class SecurityPipelineTest {
                 List.of(routeProvider(Mono.error(new IllegalStateException("config store down")))), Duration.ofSeconds(1));
 
         StepVerifier.create(contextualPipeline(0.4, failing).evaluate(ALICE_ON_USER_SERVICE))
-                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.ALLOW))
+                .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.MONITOR))
                 .verifyComplete();
         StepVerifier.create(contextualPipeline(0.9, failing).evaluate(ALICE_ON_USER_SERVICE))
                 .assertNext(decision -> assertThat(decision.outcome()).isEqualTo(Decision.Outcome.BLOCK))
@@ -420,5 +423,29 @@ class SecurityPipelineTest {
                 .verify(Duration.ofSeconds(2));
 
         assertThat(recorded.get(0).riskScore().degraded()).isTrue();
+    }
+
+    // --- five-tier decisions (Phase 3) -----------------------------------------------------------
+
+    @Test
+    void eachTierIsProducedAndRecordedWithItsUnchangedRiskScore() {
+        double[] severities = {0.1, 0.3, 0.55, 0.7, 0.9};
+        Decision.Outcome[] expected = {Decision.Outcome.ALLOW, Decision.Outcome.MONITOR, Decision.Outcome.CHALLENGE,
+                Decision.Outcome.THROTTLE, Decision.Outcome.BLOCK};
+
+        for (int i = 0; i < severities.length; i++) {
+            double severity = severities[i];
+            ThreatDetector detector = ctx -> Mono.just(new ThreatSignal("detector", true, severity, "matched"));
+            SecurityPipeline pipeline = new SecurityPipeline(List.of(detector), riskScoreEngine, decisionEngine, recorder);
+            Decision.Outcome outcome = expected[i];
+
+            StepVerifier.create(pipeline.evaluate(context))
+                    .assertNext(decision -> assertThat(decision.outcome()).as("severity %s", severity).isEqualTo(outcome))
+                    .verifyComplete();
+        }
+
+        assertThat(recorded).extracting(event -> event.decision().outcome()).containsExactly(expected);
+        assertThat(recorded).extracting(event -> event.riskScore().value())
+                .containsExactly(0.1, 0.3, 0.55, 0.7, 0.9);
     }
 }
