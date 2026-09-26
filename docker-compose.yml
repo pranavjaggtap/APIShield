@@ -36,8 +36,6 @@ services:
   user-service:
     build:
       context: ../user-service
-    ports:
-      - "8081:8081"
     networks:
       - apishield-network
     healthcheck:
