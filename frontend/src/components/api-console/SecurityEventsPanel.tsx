@@ -18,13 +18,15 @@ const DEFAULT_PAGE_SIZE = 20;
 interface SecurityEventsPanelProps {
   /** Incremented by the parent to re-fetch the current page (e.g. after a console request). */
   refreshKey: number;
+  /** Notified when the token is applied or cleared, so the parent can reuse it (e.g. the API Console). */
+  onAccessTokenChange?: (token: string | null) => void;
 }
 
 /**
  * The persisted results of APIShield's security pipeline, read from GET /api/security/events and
  * GET /api/security/events/{id}. Every row comes from the backend - nothing here is generated.
  */
-export function SecurityEventsPanel({ refreshKey }: SecurityEventsPanelProps) {
+export function SecurityEventsPanel({ refreshKey, onAccessTokenChange }: SecurityEventsPanelProps) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
@@ -38,11 +40,13 @@ export function SecurityEventsPanel({ refreshKey }: SecurityEventsPanelProps) {
   function applyToken(token: string) {
     setAccessToken(token);
     setSelected(null);
+    onAccessTokenChange?.(token);
   }
 
   function clearToken() {
     setAccessToken(null);
     setSelected(null);
+    onAccessTokenChange?.(null);
   }
 
   function changeDecision(next: SecurityEventDecision | null) {

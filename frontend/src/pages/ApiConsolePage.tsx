@@ -54,6 +54,8 @@ export function ApiConsolePage() {
   const [bodyError, setBodyError] = useState<string | null>(null);
   const [history, setHistory] = useState<RequestHistoryEntry[]>([]);
   const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
+  // Mirrors the token applied in the Security Events card (held in memory only).
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   // Synchronous guard against duplicate submission from a rapid double-click,
   // independent of React's async state batching.
@@ -106,7 +108,7 @@ export function ApiConsolePage() {
     setNetworkError(null);
 
     try {
-      const result = await apiRequestService.send(config);
+      const result = await apiRequestService.send(config, accessToken);
       const inference = inferSecurityResult(result);
       setResponse(result);
       setSecurityInference(inference);
@@ -238,7 +240,7 @@ export function ApiConsolePage() {
           <RequestHistory entries={history} />
         </Card>
 
-        <SecurityEventsPanel refreshKey={eventsRefreshKey} />
+        <SecurityEventsPanel refreshKey={eventsRefreshKey} onAccessTokenChange={setAccessToken} />
       </main>
     </div>
   );

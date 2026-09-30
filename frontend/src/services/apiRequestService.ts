@@ -92,7 +92,11 @@ export interface SendRequestError {
 }
 
 export interface ApiRequestService {
-  send(config: ApiRequestConfig): Promise<ApiResponseResult>;
+  /**
+   * `accessToken` - the in-memory token applied in the Security Events card, if any. Sent as
+   * `Authorization: Bearer <token>` unless the user added their own Authorization header row.
+   */
+  send(config: ApiRequestConfig, accessToken?: string | null): Promise<ApiResponseResult>;
 }
 
 /**
@@ -101,12 +105,16 @@ export interface ApiRequestService {
  * real request through the real gateway from day one.
  */
 export const apiRequestService: ApiRequestService = {
-  async send(config: ApiRequestConfig): Promise<ApiResponseResult> {
+  async send(config: ApiRequestConfig, accessToken?: string | null): Promise<ApiResponseResult> {
     const url = buildRequestUrl(config);
     const headers = new Headers();
     for (const [key, value] of enabledEntries(config.headers)) {
       if (isForbiddenHeaderName(key)) continue; // validated earlier in the UI; skip defensively
       headers.set(key, value);
+    }
+    // A manually entered Authorization row wins, so e.g. an invalid token can still be tested.
+    if (accessToken && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
     }
 
     const hasBody = (config.method === "POST" || config.method === "PUT") && config.body.trim().length > 0;
