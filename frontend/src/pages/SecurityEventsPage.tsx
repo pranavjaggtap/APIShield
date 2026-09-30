@@ -1,6 +1,5 @@
-import { FileWarning } from "lucide-react";
 import { TopHeader } from "../components/layout/TopHeader";
-import { PlaceholderPage } from "../components/common/PlaceholderPage";
+import { SecurityEventsPanel } from "../components/api-console/SecurityEventsPanel";
 
 export function SecurityEventsPage() {
   return (
@@ -9,11 +8,11 @@ export function SecurityEventsPage() {
         title="Security Events"
         description="Full audit trail of security decisions made by the gateway."
       />
-      <PlaceholderPage
-        icon={FileWarning}
-        title="Security event log"
-        description="A complete, filterable audit trail backed by PostgreSQL-persisted security events will live here once event persistence is implemented on the backend."
-      />
+      <main className="flex flex-1 flex-col gap-5 px-8 py-6">
+        {/* Nothing on this page sends gateway requests, so there is no external refresh trigger;
+            the panel's own Refresh button re-fetches. */}
+        <SecurityEventsPanel refreshKey={0} />
+      </main>
     </div>
   );
 }
