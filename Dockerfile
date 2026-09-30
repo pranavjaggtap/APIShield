@@ -11,5 +11,6 @@ RUN ./mvnw -q clean package -DskipTests
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
+COPY demo/jwt/public.pem /etc/apishield/demo-jwt/public.pem
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

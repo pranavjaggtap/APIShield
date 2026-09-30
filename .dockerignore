@@ -4,3 +4,4 @@ target/
 .env
 *.log
 demo/
+!demo/jwt/public.pem

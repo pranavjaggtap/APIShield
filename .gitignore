@@ -35,5 +35,6 @@ build/
 ### VS Code ###
 .vscode/
 
-### Local demo JWT keys (scripts/demo-jwt.sh) - never commit ###
-demo/jwt/
+### Local demo JWT keys (scripts/demo-jwt.sh) - never commit private key ###
+demo/jwt/*
+!demo/jwt/public.pem
